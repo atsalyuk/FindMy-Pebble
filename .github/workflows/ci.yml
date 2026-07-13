@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      # The Pebble build consumes the committed ES5 output in pebble/src/,
+      # so it must stay in sync with the TypeScript in pebble/src-ts/.
+      - name: Check committed JS matches TypeScript
+        run: git diff --exit-code -- pebble/src
+      - name: WASM crypto parity check
+        run: node pebble/tools/wasm/verify.cjs

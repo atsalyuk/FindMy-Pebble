@@ -1,0 +1,17 @@
+{
+  "name": "findmy-for-pebble",
+  "private": true,
+  "version": "0.2.0",
+  "description": "Find My for Pebble — list your Apple devices and ping them from your wrist",
+  "license": "MIT",
+  "author": "Alex Tsalyuk",
+  "type": "module",
+  "workspaces": [
+    "pebble"
+  ],
+  "scripts": {
+    "build": "npm run build -w pebble",
+    "bundle": "npm run bundle -w pebble",
+    "test": "node pebble/tools/wasm/verify.cjs"
+  }
+}

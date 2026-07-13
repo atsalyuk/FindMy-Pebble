@@ -1,0 +1,314 @@
+{
+  "name": "findmy-for-pebble-watchapp",
+  "version": "0.2.0",
+  "private": true,
+  "author": "Alex Tsalyuk",
+  "description": "Find My for Pebble — ping your Apple devices from your wrist.",
+  "license": "MIT",
+  "scripts": {
+    "deps:local": "npm install --workspaces=false",
+    "build": "tsc -p tsconfig.json && node ./tools/transpile-src.mjs",
+    "bundle": "sh ./tools/pebble-bundle.sh",
+    "install:aplite": "sh ./tools/pebble-bundle.sh && pebble install --emulator aplite --logs",
+    "install:basalt": "sh ./tools/pebble-bundle.sh && pebble install --emulator basalt --logs",
+    "install:chalk": "sh ./tools/pebble-bundle.sh && pebble install --emulator chalk --logs",
+    "install:diorite": "sh ./tools/pebble-bundle.sh && pebble install --emulator diorite --logs",
+    "install:emery": "sh ./tools/pebble-bundle.sh && pebble install --emulator emery --logs",
+    "install:flint": "sh ./tools/pebble-bundle.sh && pebble install --emulator flint --logs",
+    "install:gabbro": "sh ./tools/pebble-bundle.sh && pebble install --emulator gabbro --logs",
+    "settings:preview": "npm run build && node ./tools/settings-preview.mjs"
+  },
+  "dependencies": {
+    "@rebble/clay": "^1.0.8",
+    "bn.js": "^5.2.3",
+    "core-js": "^3.46.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.28.4",
+    "@babel/preset-env": "^7.28.3",
+    "typescript": "^5.8.2"
+  },
+  "keywords": [
+    "pebble-app"
+  ],
+  "pebble": {
+    "displayName": "FindMy for Pebble",
+    "enableMultiJS": true,
+    "projectType": "native",
+    "capabilities": [
+      "configurable",
+      "location"
+    ],
+    "resources": {
+      "media": [
+        {
+          "type": "png",
+          "name": "IMAGE_MENU_ICON",
+          "file": "images/app-icon.png",
+          "menuIcon": true
+        },
+        {
+          "type": "raw",
+          "name": "IPHONE_ICON",
+          "file": "images/iphone-normal.pdc"
+        },
+        {
+          "type": "raw",
+          "name": "IPHONE_ANIM",
+          "file": "images/iphone-shake.pdc"
+        },
+        {
+          "type": "raw",
+          "name": "IPAD_ICON",
+          "file": "images/ipad-normal.pdc"
+        },
+        {
+          "type": "raw",
+          "name": "IPAD_ANIM",
+          "file": "images/ipad-shake.pdc"
+        },
+        {
+          "type": "raw",
+          "name": "MACBOOK_ICON",
+          "file": "images/macbook-normal.pdc"
+        },
+        {
+          "type": "raw",
+          "name": "MACBOOK_ANIM",
+          "file": "images/macbook-shake.pdc"
+        },
+        {
+          "type": "png",
+          "name": "PING_ICON",
+          "file": "images/ping-icon.png"
+        },
+        {
+          "type": "png",
+          "name": "MUTE_ICON",
+          "file": "images/mute-icon.png"
+        },
+        {
+          "type": "png",
+          "name": "HEART_FILLED",
+          "file": "images/heart-filled.png"
+        },
+        {
+          "type": "png",
+          "name": "HEART_EMPTY",
+          "file": "images/heart-empty.png"
+        },
+        {
+          "type": "png",
+          "name": "HEART_LIST",
+          "file": "images/heart-list.png"
+        },
+        {
+          "type": "png",
+          "name": "HEART_LIST_WHITE",
+          "file": "images/heart-list-white.png"
+        },
+        {
+          "type": "png",
+          "name": "BATTERY_05_PERCENT",
+          "file": "images/battery/battery_05_percent.png"
+        },
+        {
+          "type": "png",
+          "name": "BATTERY_DARK_05_PERCENT",
+          "file": "images/battery/dark/battery_05_percent.png"
+        },
+        {
+          "type": "png",
+          "name": "BATTERY_LIGHT_05_PERCENT",
+          "file": "images/battery/light/battery_05_percent.png"
+        },
+        {
+          "type": "png",
+          "name": "BATTERY_10_PERCENT",
+          "file": "images/battery/battery_10_percent.png"
+        },
+        {
+          "type": "png",
+          "name": "BATTERY_DARK_10_PERCENT",
+          "file": "images/battery/dark/battery_10_percent.png"
+        },
+        {
+          "type": "png",
+          "name": "BATTERY_LIGHT_10_PERCENT",
+          "file": "images/battery/light/battery_10_percent.png"
+        },
+        {
+          "type": "png",
+          "name": "BATTERY_20_PERCENT",
+          "file": "images/battery/battery_20_percent.png"
+        },
+        {
+          "type": "png",
+          "name": "BATTERY_DARK_20_PERCENT",
+          "file": "images/battery/dark/battery_20_percent.png"
+        },
+        {
+          "type": "png",
+          "name": "BATTERY_LIGHT_20_PERCENT",
+          "file": "images/battery/light/battery_20_percent.png"
+        },
+        {
+          "type": "png",
+          "name": "BATTERY_30_PERCENT",
+          "file": "images/battery/battery_30_percent.png"
+        },
+        {
+          "type": "png",
+          "name": "BATTERY_DARK_30_PERCENT",
+          "file": "images/battery/dark/battery_30_percent.png"
+        },
+        {
+          "type": "png",
+          "name": "BATTERY_LIGHT_30_PERCENT",
+          "file": "images/battery/light/battery_30_percent.png"
+        },
+        {
+          "type": "png",
+          "name": "BATTERY_40_PERCENT",
+          "file": "images/battery/battery_40_percent.png"
+        },
+        {
+          "type": "png",
+          "name": "BATTERY_DARK_40_PERCENT",
+          "file": "images/battery/dark/battery_40_percent.png"
+        },
+        {
+          "type": "png",
+          "name": "BATTERY_LIGHT_40_PERCENT",
+          "file": "images/battery/light/battery_40_percent.png"
+        },
+        {
+          "type": "png",
+          "name": "BATTERY_50_PERCENT",
+          "file": "images/battery/battery_50_percent.png"
+        },
+        {
+          "type": "png",
+          "name": "BATTERY_DARK_50_PERCENT",
+          "file": "images/battery/dark/battery_50_percent.png"
+        },
+        {
+          "type": "png",
+          "name": "BATTERY_LIGHT_50_PERCENT",
+          "file": "images/battery/light/battery_50_percent.png"
+        },
+        {
+          "type": "png",
+          "name": "BATTERY_60_PERCENT",
+          "file": "images/battery/battery_60_percent.png"
+        },
+        {
+          "type": "png",
+          "name": "BATTERY_DARK_60_PERCENT",
+          "file": "images/battery/dark/battery_60_percent.png"
+        },
+        {
+          "type": "png",
+          "name": "BATTERY_LIGHT_60_PERCENT",
+          "file": "images/battery/light/battery_60_percent.png"
+        },
+        {
+          "type": "png",
+          "name": "BATTERY_70_PERCENT",
+          "file": "images/battery/battery_70_percent.png"
+        },
+        {
+          "type": "png",
+          "name": "BATTERY_DARK_70_PERCENT",
+          "file": "images/battery/dark/battery_70_percent.png"
+        },
+        {
+          "type": "png",
+          "name": "BATTERY_LIGHT_70_PERCENT",
+          "file": "images/battery/light/battery_70_percent.png"
+        },
+        {
+          "type": "png",
+          "name": "BATTERY_80_PERCENT",
+          "file": "images/battery/battery_80_percent.png"
+        },
+        {
+          "type": "png",
+          "name": "BATTERY_DARK_80_PERCENT",
+          "file": "images/battery/dark/battery_80_percent.png"
+        },
+        {
+          "type": "png",
+          "name": "BATTERY_LIGHT_80_PERCENT",
+          "file": "images/battery/light/battery_80_percent.png"
+        },
+        {
+          "type": "png",
+          "name": "BATTERY_90_PERCENT",
+          "file": "images/battery/battery_90_percent.png"
+        },
+        {
+          "type": "png",
+          "name": "BATTERY_DARK_90_PERCENT",
+          "file": "images/battery/dark/battery_90_percent.png"
+        },
+        {
+          "type": "png",
+          "name": "BATTERY_LIGHT_90_PERCENT",
+          "file": "images/battery/light/battery_90_percent.png"
+        },
+        {
+          "type": "png",
+          "name": "BATTERY_100_PERCENT",
+          "file": "images/battery/battery_100_percent.png"
+        },
+        {
+          "type": "png",
+          "name": "BATTERY_DARK_100_PERCENT",
+          "file": "images/battery/dark/battery_100_percent.png"
+        },
+        {
+          "type": "png",
+          "name": "BATTERY_LIGHT_100_PERCENT",
+          "file": "images/battery/light/battery_100_percent.png"
+        },
+        {
+          "type": "png",
+          "name": "BATTERY_CHARGING_ICON",
+          "file": "images/battery/battery_charging_icon.png"
+        },
+        {
+          "type": "png",
+          "name": "BATTERY_DARK_CHARGING_ICON",
+          "file": "images/battery/dark/battery_charging_icon.png"
+        },
+        {
+          "type": "png",
+          "name": "BATTERY_LIGHT_CHARGING_ICON",
+          "file": "images/battery/light/battery_charging_icon.png"
+        }
+      ]
+    },
+    "sdkVersion": "3",
+    "targetPlatforms": [
+      "aplite",
+      "basalt",
+      "chalk",
+      "diorite",
+      "emery",
+      "flint",
+      "gabbro"
+    ],
+    "uuid": "3de7388d-d4e7-446a-8f8b-25f5453edcff",
+    "messageKeys": [
+      "appleId",
+      "password",
+      "twoFactorCode",
+      "action",
+      "distanceUnit"
+    ],
+    "watchapp": {
+      "watchface": false
+    }
+  }
+}

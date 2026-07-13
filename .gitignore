@@ -1,0 +1,26 @@
+node_modules/
+.DS_Store
+tmp/
+*.zip
+*.pbw
+*.js.map
+.claude/
+
+# Pebble build state
+pebble/build/
+pebble/.lock-waf_*
+pebble/*.png
+
+# TypeScript incremental state
+**/tsconfig.tsbuildinfo
+
+# Retired experiments — not part of the watch app; never commit them again
+/worker/
+/web/
+/shared/
+/tools/
+/docs/
+pebble/src/embeddedjs/
+pebble/src-ts/embeddedjs/
+pebble/src/pkjs/generated-bridge-config.js
+pebble/.local/

@@ -1,0 +1,149 @@
+[
+  {
+    "type": "heading",
+    "defaultValue": "FindMy for Pebble",
+    "size": 1,
+    "id": "main-heading"
+  },
+  {
+    "type": "text",
+    "defaultValue": "Sign in to locate and ping your Apple devices",
+    "id": "subtitle"
+  },
+  {
+    "type": "section",
+    "id": "login-section",
+    "items": [
+      {
+        "type": "text",
+        "id": "login-note",
+        "defaultValue": ""
+      },
+      {
+        "type": "input",
+        "messageKey": "appleId",
+        "label": "Apple ID",
+        "attributes": {
+          "type": "email",
+          "placeholder": "email@icloud.com",
+          "autocomplete": "email"
+        }
+      },
+      {
+        "type": "input",
+        "messageKey": "password",
+        "label": "Password",
+        "attributes": {
+          "type": "password",
+          "placeholder": "Required",
+          "autocomplete": "current-password"
+        }
+      },
+      {
+        "type": "button",
+        "id": "sign-in-btn",
+        "defaultValue": "Sign In"
+      }
+    ]
+  },
+  {
+    "type": "section",
+    "id": "verify-section",
+    "items": [
+      {
+        "type": "text",
+        "id": "verify-notice",
+        "defaultValue": "<span style='display:inline-block;background:#e5e5ea;color:#8e8e93;border-radius:999px;padding:4px 10px;font-size:12px;font-weight:600;margin-bottom:8px'>Verification</span><br>Enter your Apple verification code."
+      },
+      {
+        "type": "input",
+        "messageKey": "twoFactorCode",
+        "label": "Verification Code",
+        "attributes": {
+          "inputmode": "numeric",
+          "autocomplete": "one-time-code",
+          "placeholder": "6-digit code"
+        }
+      },
+      {
+        "type": "button",
+        "id": "verify-btn",
+        "defaultValue": "Verify"
+      },
+      {
+        "type": "button",
+        "id": "sms-btn",
+        "defaultValue": "Resend Code"
+      }
+    ]
+  },
+  {
+    "type": "section",
+    "id": "busy-section",
+    "items": [
+      {
+        "type": "text",
+        "id": "busy-note",
+        "defaultValue": "<p style='font-size:15px;color:#8e8e93;text-align:center;padding:16px 0;line-height:1.4'>Working… please close this page and reopen it in a few seconds.</p>"
+      }
+    ]
+  },
+  {
+    "type": "section",
+    "id": "signout-section",
+    "items": [
+      {
+        "type": "text",
+        "id": "signed-in-text",
+        "defaultValue": "<div style='font-size:14px;color:#8e8e93;text-align:center;padding:8px 0'>Signed in</div>"
+      },
+      {
+        "type": "button",
+        "id": "sign-out-btn",
+        "defaultValue": "Sign Out",
+        "attributes": {
+          "style": "background:none;color:#ff3b30;font-size:15px"
+        }
+      }
+    ]
+  },
+  {
+    "type": "section",
+    "id": "support-section",
+    "items": [
+      {
+        "type": "text",
+        "id": "distance-unit-text",
+        "defaultValue": "<p style='text-align:center;color:#8e8e93'>Distance units: <strong>Miles</strong></p>"
+      },
+      {
+        "type": "button",
+        "id": "distance-unit-miles-btn",
+        "defaultValue": "Use Miles"
+      },
+      {
+        "type": "button",
+        "id": "distance-unit-kilometers-btn",
+        "defaultValue": "Use Kilometers"
+      },
+      {
+        "type": "text",
+        "id": "logs-widget",
+        "defaultValue": ""
+      },
+      {
+        "type": "button",
+        "id": "reset-all-btn",
+        "defaultValue": "Reset To Defaults",
+        "attributes": {
+          "style": "background:none;color:#ff3b30;font-size:15px"
+        }
+      }
+    ]
+  },
+  {
+    "id": "privacy-note",
+    "type": "text",
+    "defaultValue": "<p style='font-size:12px;color:#8e8e93;text-align:center;margin-top:24px;line-height:1.4'>Your credentials are processed entirely on this device.<br>They are sent directly to Apple and never touch any server.</p>"
+  }
+]

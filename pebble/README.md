@@ -18,8 +18,9 @@ The bundle entry is defined in [`wscript`](wscript), which points at
 - watch targets `aplite`, `basalt`, `chalk`, `diorite`, `emery`, `flint`, and
   `gabbro`
 - PKJS owns Apple sign-in, 2FA, local session state, device sync, and ping
-- the settings page includes sign-in, verify, sign-out, and a collapsible
-  sanitized-log viewer with copy-to-clipboard
+- the settings page includes sign-in, verify, sign-out, an "Open at launch"
+  device picker (shown once signed in), and a collapsible sanitized-log viewer
+  with copy-to-clipboard
 - SRP sign-in math runs in a small WASM module (with a pure-JS fallback) —
   see [`tools/wasm`](tools/wasm)
 

@@ -493,6 +493,12 @@ var buildCookieHeader = function buildCookieHeader() {
     return cookieJar[name];
   }).join("; ");
 };
+// Diagnostic for Find My's HTTP 450 re-auth gate: Apple's error body (if any)
+// plus which cookies (names only — values never logged) were presented, so a
+// log dump shows whether stale X-APPLE-WEBAUTH-* cookies are in play.
+var describeFmipRejection = function describeFmipRejection(response) {
+  return "body=" + (String(response.text || "").slice(0, 240) || "<empty>") + " sentCookies=[" + Object.keys(cookieJar).join(",") + "]";
+};
 console.log("pkjs bootstrap loaded");
 // Probe whether this runtime can run WebAssembly. If it can, the SRP crypto
 // (PBKDF2 + 2048-bit modexp) can be moved to a WASM module for near-native
@@ -687,10 +693,9 @@ var readStoredPreferences = function readStoredPreferences() {
   }
   try {
     var parsed = JSON.parse(raw);
-    return parsed.distanceUnit === "kilometers" ? {
-      distanceUnit: "kilometers"
-    } : {
-      distanceUnit: "miles"
+    return {
+      distanceUnit: parsed.distanceUnit === "kilometers" ? "kilometers" : "miles",
+      launchDeviceId: typeof parsed.launchDeviceId === "string" && parsed.launchDeviceId ? parsed.launchDeviceId : undefined
     };
   } catch (_error) {
     localStorage.removeItem(PKJS_PREFERENCES_KEY);
@@ -700,10 +705,14 @@ var readStoredPreferences = function readStoredPreferences() {
 var resolvedDistanceUnit = function resolvedDistanceUnit() {
   return readStoredPreferences().distanceUnit || "miles";
 };
-var writeStoredPreferences = function writeStoredPreferences(preferences) {
-  localStorage.setItem(PKJS_PREFERENCES_KEY, JSON.stringify(preferences));
+var resolvedLaunchDeviceId = function resolvedLaunchDeviceId() {
+  return readStoredPreferences().launchDeviceId || "";
+};
+var writeStoredPreferences = function writeStoredPreferences(update) {
+  localStorage.setItem(PKJS_PREFERENCES_KEY, JSON.stringify(Object.assign({}, readStoredPreferences(), update)));
 };
 var persistDirectAppleSession = function persistDirectAppleSession(session) {
+  var stored = readStoredDirectAppleSettings();
   writeStoredDirectAppleSettings({
     appleId: session.appleId,
     defaultDeviceId: session.defaultDeviceId,
@@ -713,12 +722,15 @@ var persistDirectAppleSession = function persistDirectAppleSession(session) {
     cookieHeader: String(session.cookieHeader || ""),
     playSoundUrl: String(session.playSoundUrl || ""),
     sessionToken: String(session.sessionToken || ""),
-    trustToken: String(session.trustToken || ""),
+    // The trust token is only re-issued by /2sv/trust; most responses along a
+    // re-auth path never carry one. An empty value here must never clobber the
+    // stored token — losing it forces the user through 2FA again.
+    trustToken: String(session.trustToken || stored.trustToken || ""),
     accountCountry: String(session.accountCountry || ""),
     scnt: String(session.scnt || ""),
     sessionId: String(session.sessionId || ""),
     authAttributes: String(session.authAttributes || ""),
-    password: String(session.password || readStoredDirectAppleSettings().password || "")
+    password: String(session.password || stored.password || "")
   });
 };
 var resolvedDirectAppleSettings = function resolvedDirectAppleSettings() {
@@ -1049,6 +1061,14 @@ var buildClayUrl = function buildClayUrl() {
     configStage: configStage,
     appleId: settings.appleId || "",
     distanceUnit: resolvedDistanceUnit(),
+    // Cached devices for the "Open at launch" picker shown once signed in.
+    devices: ensureState().devices.map(function (device) {
+      return {
+        id: device.id,
+        name: device.name
+      };
+    }),
+    launchDeviceId: resolvedLaunchDeviceId(),
     pendingMode: pending ? pending.deliveryMethod || pending.mode || "" : "",
     pendingNotice: pending ? pending.deliveryNotice || "Enter your Apple verification code." : "",
     loginError: loginErrorNotice || "",
@@ -1123,11 +1143,17 @@ var ensureState = function ensureState() {
 };
 var sendDeviceSync = function sendDeviceSync(state) {
   var _a;
-  var watchSync = devicesForWatch(state.devices, state.connection.defaultDeviceId);
+  // When a launch device is chosen it also drives the watch list windowing so
+  // it stays visible even past the per-platform device limit.
+  var launchDeviceId = resolvedLaunchDeviceId();
+  var watchSync = devicesForWatch(state.devices, launchDeviceId || state.connection.defaultDeviceId);
   currentDevices = watchSync.devices;
+  var launchIndex = launchDeviceId ? watchSync.devices.findIndex(function (device) {
+    return device.id === launchDeviceId;
+  }) : -1;
   sendResponse((_a = {}, _a[APP_MESSAGE_KEYS.state] = encodeStateCode(state.connection.state), _a[APP_MESSAGE_KEYS.devices] = JSON.stringify(watchSync.devices.map(function (device) {
     return [device.name, device.deviceClass, formatDistanceText(device.distanceMeters), formatBatteryText(device.batteryLevelPercent, device.isCharging)];
-  })), _a[APP_MESSAGE_KEYS.selectedIndex] = watchSync.selectedIndex, _a));
+  })), _a[APP_MESSAGE_KEYS.selectedIndex] = watchSync.selectedIndex, _a[APP_MESSAGE_KEYS.launchIndex] = launchIndex, _a));
 };
 var sendResetSync = function sendResetSync(state) {
   var _a;
@@ -1862,7 +1888,12 @@ var runAppleSrpSignin = function runAppleSrpSignin(trimmedAppleId, password) {
             serviceRoot: previous.serviceRoot || "",
             dsid: previous.dsid || "",
             clientId: clientId,
-            password: password
+            password: password,
+            // signin/complete does not re-issue X-Apple-TwoSV-Trust-Token on a
+            // trusted (200) sign-in — only /2sv/trust after 2FA does. Seed the
+            // stored token so a header-less response can't blank it out of the
+            // persisted session, which would force 2FA on the next re-auth.
+            trustToken: previous.trustToken || ""
           }, completeResponse.headers);
           logTiming("srp-signin:total", srpStartMs, "-> " + completeResponse.status);
           return [2 /*return*/, {
@@ -2021,7 +2052,12 @@ var attemptSilentReauth = function attemptSilentReauth(session) {
           _a.label = 1;
         case 1:
           _a.trys.push([1, 8, 9, 10]);
-          console.log("silentReauth: re-running SRP sign-in with stored credentials");
+          // Start from an empty cookie jar, like a fresh browser would. The dead
+          // session's cookies (especially the FMIP-scoped X-APPLE-WEBAUTH-* set)
+          // otherwise get replayed alongside the new login's cookies, and Find My's
+          // re-auth gate keeps answering initClient with an instant HTTP 450.
+          clearCookieJar();
+          console.log("silentReauth: cleared cookie jar; re-running SRP sign-in with stored credentials");
           return [4 /*yield*/, runAppleSrpSignin(appleId, password)];
         case 2:
           signin = _a.sent();
@@ -2390,8 +2426,8 @@ var refreshDevicesDirectApple = function refreshDevicesDirectApple(state_1) {
           }
           _a.label = 19;
         case 19:
-          if (!(response.status === 450)) return [3 /*break*/, 27];
-          console.log("refreshDevices: got 450, re-authenticating session...");
+          if (!(response.status === 450)) return [3 /*break*/, 28];
+          console.log("refreshDevices: got 450, re-authenticating session... " + describeFmipRejection(response));
           _a.label = 20;
         case 20:
           _a.trys.push([20, 23,, 24]);
@@ -2411,7 +2447,7 @@ var refreshDevicesDirectApple = function refreshDevicesDirectApple(state_1) {
           console.log("refreshDevices: re-auth failed: " + String(reAuthError_1));
           return [3 /*break*/, 24];
         case 24:
-          if (!(response.status === 450)) return [3 /*break*/, 27];
+          if (!(response.status === 450)) return [3 /*break*/, 28];
           console.log("refreshDevices: still 450, attempting silent re-auth");
           return [4 /*yield*/, attemptSilentReauth(session)];
         case 25:
@@ -2421,8 +2457,27 @@ var refreshDevicesDirectApple = function refreshDevicesDirectApple(state_1) {
           return [4 /*yield*/, requestRefresh(session)];
         case 26:
           response = _a.sent();
-          _a.label = 27;
+          if (response.status === 450) {
+            console.log("refreshDevices: 450 persists on a fresh session " + describeFmipRejection(response));
+          }
+          return [3 /*break*/, 28];
         case 27:
+          // Silent re-auth needs the user (no stored password, or the trust
+          // token was rejected with a 409). Reporting this as "degraded" would
+          // hide the sign-in prompt and re-run a full SRP sign-in against Apple
+          // on every sync — surface needs_reauth like the 401/403/421 path.
+          return [2 /*return*/, Object.assign({}, state, {
+            devices: [],
+            session: session,
+            connection: {
+              state: "needs_reauth",
+              summary: "Apple session expired. Open settings to sign in again.",
+              provider: "direct_apple",
+              lastCheckedAt: nowIso(),
+              defaultDeviceId: session.defaultDeviceId
+            }
+          })];
+        case 28:
           if (response.status !== 200 || !response.body || !Array.isArray(response.body.content)) {
             return [2 /*return*/, Object.assign({}, state, {
               devices: [],
@@ -2436,7 +2491,7 @@ var refreshDevicesDirectApple = function refreshDevicesDirectApple(state_1) {
             })];
           }
           return [4 /*yield*/, userLocationPromise];
-        case 28:
+        case 29:
           userLocation = _a.sent();
           visibleDevices = response.body.content.filter(function (device) {
             return isVisibleWatchTarget(device) && isRecentlyOnline(device);
@@ -2871,6 +2926,16 @@ Pebble.addEventListener("webviewclosed", function (event) {
       writeStoredPreferences({
         distanceUnit: distanceUnit
       });
+      sendDeviceSync(ensureState());
+      return;
+    }
+    if (action === "set_launch_device") {
+      var launchDeviceId = String(parsed.launchDeviceId || "");
+      console.log("set_launch_device: " + (launchDeviceId ? "device selected" : "device list (default)"));
+      writeStoredPreferences({
+        launchDeviceId: launchDeviceId
+      });
+      // Push a sync right away so the watch persists the new launch target.
       sendDeviceSync(ensureState());
       return;
     }

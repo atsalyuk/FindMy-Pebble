@@ -6,7 +6,8 @@ export const APP_MESSAGE_KEYS = {
   state: 17005,
   devices: 17006,
   selectedIndex: 17007,
-  reset: 17008
+  reset: 17008,
+  launchIndex: 17009
 } as const;
 
 export const APP_ACTIONS = {

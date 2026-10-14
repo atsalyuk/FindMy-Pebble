@@ -9,6 +9,7 @@
 #define MSG_KEY_DEVICES       17006
 #define MSG_KEY_SELECTED_IDX  17007
 #define MSG_KEY_RESET         17008
+#define MSG_KEY_LAUNCH_IDX    17009
 #define PKJS_READY_KEY        15025
 
 // Actions (watch → phone)

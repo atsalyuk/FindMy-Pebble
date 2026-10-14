@@ -27,6 +27,7 @@ static uint32_t app_message_outbox_size(void) {
 
 void state_load(void) {
   s_state.selected_index = persist_exists(PERSIST_KEY_SELECTED) ? persist_read_int(PERSIST_KEY_SELECTED) : 0;
+  s_state.launch_index = persist_exists(PERSIST_KEY_LAUNCH_IDX) ? persist_read_int(PERSIST_KEY_LAUNCH_IDX) : -1;
   s_state.favorite_count = 0;
   if (persist_exists(PERSIST_KEY_FAVORITES)) {
     persist_read_data(PERSIST_KEY_FAVORITES, s_state.favorites, sizeof(s_state.favorites));
@@ -61,6 +62,7 @@ void state_load(void) {
 
 void state_save(void) {
   persist_write_int(PERSIST_KEY_SELECTED, s_state.selected_index);
+  persist_write_int(PERSIST_KEY_LAUNCH_IDX, s_state.launch_index);
   persist_write_data(PERSIST_KEY_FAVORITES, s_state.favorites, sizeof(s_state.favorites));
   persist_write_int(PERSIST_KEY_DEVICE_COUNT, s_state.device_count);
   for (int i = 0; i < s_state.device_count && i < MAX_DEVICES; i++) {
@@ -284,10 +286,12 @@ static void inbox_received(DictionaryIterator *iter, void *context) {
     memset(s_state.favorites, 0, sizeof(s_state.favorites));
     s_state.favorite_count = 0;
     s_state.selected_index = 0;
+    s_state.launch_index = -1;
     s_state.device_count = 0;
     s_state.busy = false;
     s_state.ping_result[0] = '\0';
     persist_delete(PERSIST_KEY_SELECTED);
+    persist_delete(PERSIST_KEY_LAUNCH_IDX);
     persist_delete(PERSIST_KEY_FAVORITES);
     persist_delete(PERSIST_KEY_DEVICE_COUNT);
     for (int i = 0; i < MAX_DEVICES; i++) {
@@ -320,6 +324,12 @@ static void inbox_received(DictionaryIterator *iter, void *context) {
         selected = s_state.device_count > 0 ? s_state.device_count - 1 : 0;
       }
       s_state.selected_index = selected;
+    }
+    // "Open at launch" target from phone settings; applies on the next launch.
+    Tuple *launch_tuple = dict_find(iter, MSG_KEY_LAUNCH_IDX);
+    if (launch_tuple) {
+      int launch = (int)launch_tuple->value[0].int32;
+      s_state.launch_index = (launch >= 0 && launch < s_state.device_count) ? launch : -1;
     }
     APP_LOG(APP_LOG_LEVEL_INFO, "parsed %d devices", s_state.device_count);
     s_state.busy = false;
@@ -381,6 +391,15 @@ static void init(void) {
 
   // Show list window
   list_window_push();
+
+  // "Open at launch": jump straight into the chosen device's detail view over
+  // the cached list (Back returns to the list). Must run after
+  // list_window_push(), whose load handler resets selected_index to the top
+  // row. Skipped when the cache no longer covers the stored index.
+  if (s_state.launch_index >= 0 && s_state.launch_index < s_state.device_count) {
+    s_state.selected_index = s_state.launch_index;
+    detail_window_push();
+  }
   APP_LOG(APP_LOG_LEVEL_INFO, "FindMy for Pebble C app initialized");
 
   // Proactively request sync after a short delay (PKJS may already be ready).

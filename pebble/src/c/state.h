@@ -11,6 +11,7 @@
 #define PERSIST_KEY_SELECTED     0
 #define PERSIST_KEY_FAVORITES    1
 #define PERSIST_KEY_DEVICE_COUNT 2
+#define PERSIST_KEY_LAUNCH_IDX   3
 // Each cached device is stored in its own key (a Device exceeds the 256-byte
 // per-key persist limit only in aggregate, so one key per device).
 #define PERSIST_KEY_DEVICES_BASE 10
@@ -28,6 +29,9 @@ typedef struct {
   Device devices[MAX_DEVICES];
   int device_count;
   int selected_index;
+  // Device to auto-open the detail view for at launch; -1 = start on the list.
+  // Mirrors the phone-side "Open at launch" setting via MSG_KEY_LAUNCH_IDX.
+  int launch_index;
   int connection_state;
   // True once a fresh device sync has arrived from PKJS this session. Devices
   // restored from persist storage show immediately but keep synced=false, so

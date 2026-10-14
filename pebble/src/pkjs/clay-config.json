@@ -98,6 +98,11 @@
         "defaultValue": "<div style='font-size:14px;color:#8e8e93;text-align:center;padding:8px 0'>Signed in</div>"
       },
       {
+        "type": "text",
+        "id": "launch-device-widget",
+        "defaultValue": ""
+      },
+      {
         "type": "button",
         "id": "sign-out-btn",
         "defaultValue": "Sign Out",

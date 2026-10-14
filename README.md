@@ -15,6 +15,8 @@ is no third-party backend.
 - lists the devices visible to your Apple account
 - plays a Find My sound on a chosen device
 - remembers a default device for one-click pinging
+- optionally opens straight into a device of your choice at launch ("Open at
+  launch" in settings, once signed in)
 - Apple sign-in and 2FA (trusted-device code or SMS) from the phone settings
   page
 - a collapsible sanitized-log viewer with one-tap copy in the settings page

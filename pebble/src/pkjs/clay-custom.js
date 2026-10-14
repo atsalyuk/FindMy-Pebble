@@ -4,7 +4,8 @@
  * Clay custom function for FindMy for Pebble settings page.
  * Serialized via .toString() — no require() or closures allowed.
  *
- * userData: { configStage, appleId, distanceUnit, pendingMode, pendingNotice }
+ * userData: { configStage, appleId, distanceUnit, devices, launchDeviceId,
+ *             pendingMode, pendingNotice }
  *
  * Every action closes with a Clay-shaped payload so the phone app and PKJS
  * both see declared message keys instead of ad hoc objects.
@@ -30,6 +31,7 @@ module.exports = function (minified) {
     var logsWidget = clayConfig.getItemById('logs-widget');
     var smsBtn = clayConfig.getItemById('sms-btn');
     var signOutBtn = clayConfig.getItemById('sign-out-btn');
+    var launchDeviceWidget = clayConfig.getItemById('launch-device-widget');
     var resetAllBtn = clayConfig.getItemById('reset-all-btn');
     var distanceUnitText = clayConfig.getItemById('distance-unit-text');
     var milesBtn = clayConfig.getItemById('distance-unit-miles-btn');
@@ -93,6 +95,65 @@ module.exports = function (minified) {
     // Show signed-in email
     if (signedInText && hasSession) {
       signedInText.set('<div style="font-size:14px;color:#8e8e93;text-align:center;padding:8px 0">Signed in as <strong>' + appleId + '</strong></div>');
+    }
+
+    // "Open at launch" picker — choose the cached device the watch app opens
+    // straight into, or "Device list" for the normal list-first behavior.
+    // Each tap closes the page with a set_launch_device action, matching how
+    // the other one-tap settings (distance unit, sign out) work.
+    if (launchDeviceWidget && hasSession && typeof document !== 'undefined') {
+      var devices = Array.isArray(userData.devices) ? userData.devices : [];
+      var escapeHtml = function escapeHtml(value) {
+        return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) {
+          return {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+          }[ch];
+        });
+      };
+      var storedLaunchId = String(userData.launchDeviceId || '');
+      // Treat a stored id that no longer matches a cached device as "Device list".
+      var activeLaunchId = '';
+      for (var di = 0; di < devices.length; di++) {
+        if (devices[di] && String(devices[di].id || '') === storedLaunchId) {
+          activeLaunchId = storedLaunchId;
+          break;
+        }
+      }
+      // Styled to blend with Clay's dark settings pane (#414141 section on
+      // #333 page): transparent rows, #484848 dividers, white labels, gray
+      // secondary text, and Clay-orange radio dots — like a native radiogroup.
+      var launchRow = function launchRow(id, label, sublabel, checked, first) {
+        return '<div data-launch-id="' + escapeHtml(id) + '" style="display:flex;align-items:center;justify-content:space-between;padding:10px 2px;cursor:pointer' + (first ? '' : ';border-top:1px solid #484848') + '">' + '<span style="font-size:16px;color:#ffffff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:10px">' + escapeHtml(label) + (sublabel ? ' <span style="color:#a4a4a4;font-size:13px">' + sublabel + '</span>' : '') + '</span>' + '<span style="flex:none;box-sizing:border-box;width:18px;height:18px;border-radius:50%;border:2px solid ' + (checked ? '#ff4700' : '#767676') + ';background:' + (checked ? '#ff4700' : 'transparent') + ';display:flex;align-items:center;justify-content:center">' + (checked ? '<span style="width:7px;height:7px;border-radius:50%;background:#ffffff"></span>' : '') + '</span>' + '</div>';
+      };
+      var rows = launchRow('', 'Device list', 'default', activeLaunchId === '', true);
+      for (var ri = 0; ri < devices.length; ri++) {
+        var dev = devices[ri] || {};
+        var devId = String(dev.id || '');
+        if (!devId) continue;
+        rows += launchRow(devId, String(dev.name || 'Unnamed device'), '', activeLaunchId === devId, false);
+      }
+      var emptyHint = devices.length === 0 ? '<p style="margin:4px 0 0;font-size:12px;color:#a4a4a4">Your devices will appear here after the watch app syncs once.</p>' : '';
+      launchDeviceWidget.set('<div style="margin:2px 0 8px;text-align:left">' + '<p style="margin:0 0 2px;font-size:13px;font-weight:600;color:#a4a4a4;text-transform:uppercase;letter-spacing:.4px">Open at launch</p>' + '<div id="launch-device-list">' + rows + '</div>' + emptyHint + '<p style="margin:4px 0 0;font-size:12px;color:#858585">The watch app will open straight into this device.</p>' + '</div>');
+      var launchListEl = document.getElementById('launch-device-list');
+      if (launchListEl) {
+        launchListEl.addEventListener('click', function (event) {
+          prevent(event);
+          var node = event.target;
+          while (node && node !== launchListEl && !(node.hasAttribute && node.hasAttribute('data-launch-id'))) {
+            node = node.parentNode;
+          }
+          if (!node || node === launchListEl || !node.hasAttribute || !node.hasAttribute('data-launch-id')) {
+            return;
+          }
+          closeWith(clayPayload('set_launch_device', {
+            launchDeviceId: node.getAttribute('data-launch-id') || ''
+          }));
+        });
+      }
     }
     if (distanceUnitText) {
       distanceUnitText.set('<p style="text-align:center;color:#8e8e93">Distance units: <strong>' + (distanceUnit === 'kilometers' ? 'Kilometers' : 'Miles') + '</strong></p>');

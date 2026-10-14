@@ -527,6 +527,13 @@ const mergeSetCookies = (setCookieHeader: string) => {
 const buildCookieHeader = (): string =>
   Object.keys(cookieJar).map((name) => cookieJar[name]).join("; ");
 
+// Diagnostic for Find My's HTTP 450 re-auth gate: Apple's error body (if any)
+// plus which cookies (names only — values never logged) were presented, so a
+// log dump shows whether stale X-APPLE-WEBAUTH-* cookies are in play.
+const describeFmipRejection = (response: JsonResponse) =>
+  "body=" + (String(response.text || "").slice(0, 240) || "<empty>") +
+  " sentCookies=[" + Object.keys(cookieJar).join(",") + "]";
+
 console.log("pkjs bootstrap loaded");
 
 // Probe whether this runtime can run WebAssembly. If it can, the SRP crypto
@@ -740,15 +747,27 @@ const clearStoredDirectAppleSettings = () => {
   localStorage.removeItem(PKJS_DIRECT_SETTINGS_KEY);
 };
 
-const readStoredPreferences = (): { distanceUnit?: DistanceUnit } => {
+type StoredPreferences = {
+  distanceUnit?: DistanceUnit;
+  // Device the watch app opens straight into at launch ("" / absent = device list).
+  // Deliberately separate from session.defaultDeviceId, which auto-follows the
+  // last pinged device — this one only changes when the user picks it in settings.
+  launchDeviceId?: string;
+};
+
+const readStoredPreferences = (): StoredPreferences => {
   const raw = localStorage.getItem(PKJS_PREFERENCES_KEY);
   if (!raw) {
     return {};
   }
 
   try {
-    const parsed = JSON.parse(raw) as { distanceUnit?: string };
-    return parsed.distanceUnit === "kilometers" ? { distanceUnit: "kilometers" } : { distanceUnit: "miles" };
+    const parsed = JSON.parse(raw) as { distanceUnit?: string; launchDeviceId?: string };
+    return {
+      distanceUnit: parsed.distanceUnit === "kilometers" ? "kilometers" : "miles",
+      launchDeviceId:
+        typeof parsed.launchDeviceId === "string" && parsed.launchDeviceId ? parsed.launchDeviceId : undefined
+    };
   } catch (_error) {
     localStorage.removeItem(PKJS_PREFERENCES_KEY);
     return {};
@@ -757,11 +776,14 @@ const readStoredPreferences = (): { distanceUnit?: DistanceUnit } => {
 
 const resolvedDistanceUnit = (): DistanceUnit => readStoredPreferences().distanceUnit || "miles";
 
-const writeStoredPreferences = (preferences: { distanceUnit: DistanceUnit }) => {
-  localStorage.setItem(PKJS_PREFERENCES_KEY, JSON.stringify(preferences));
+const resolvedLaunchDeviceId = (): string => readStoredPreferences().launchDeviceId || "";
+
+const writeStoredPreferences = (update: Partial<StoredPreferences>) => {
+  localStorage.setItem(PKJS_PREFERENCES_KEY, JSON.stringify(Object.assign({}, readStoredPreferences(), update)));
 };
 
 const persistDirectAppleSession = (session: AppleSessionBundle) => {
+  const stored = readStoredDirectAppleSettings();
   writeStoredDirectAppleSettings({
     appleId: session.appleId,
     defaultDeviceId: session.defaultDeviceId,
@@ -771,12 +793,15 @@ const persistDirectAppleSession = (session: AppleSessionBundle) => {
     cookieHeader: String(session.cookieHeader || ""),
     playSoundUrl: String(session.playSoundUrl || ""),
     sessionToken: String(session.sessionToken || ""),
-    trustToken: String(session.trustToken || ""),
+    // The trust token is only re-issued by /2sv/trust; most responses along a
+    // re-auth path never carry one. An empty value here must never clobber the
+    // stored token — losing it forces the user through 2FA again.
+    trustToken: String(session.trustToken || stored.trustToken || ""),
     accountCountry: String(session.accountCountry || ""),
     scnt: String(session.scnt || ""),
     sessionId: String(session.sessionId || ""),
     authAttributes: String(session.authAttributes || ""),
-    password: String(session.password || readStoredDirectAppleSettings().password || "")
+    password: String(session.password || stored.password || "")
   });
 };
 
@@ -1137,6 +1162,9 @@ const buildClayUrl = () => {
     configStage,
     appleId: settings.appleId || "",
     distanceUnit: resolvedDistanceUnit(),
+    // Cached devices for the "Open at launch" picker shown once signed in.
+    devices: ensureState().devices.map((device) => ({ id: device.id, name: device.name })),
+    launchDeviceId: resolvedLaunchDeviceId(),
     pendingMode: pending ? (pending.deliveryMethod || pending.mode || "") : "",
     pendingNotice: pending ? (pending.deliveryNotice || "Enter your Apple verification code.") : "",
     loginError: loginErrorNotice || "",
@@ -1226,8 +1254,14 @@ const ensureState = (): LocalState => {
 };
 
 const sendDeviceSync = (state: LocalState) => {
-  const watchSync = devicesForWatch(state.devices, state.connection.defaultDeviceId);
+  // When a launch device is chosen it also drives the watch list windowing so
+  // it stays visible even past the per-platform device limit.
+  const launchDeviceId = resolvedLaunchDeviceId();
+  const watchSync = devicesForWatch(state.devices, launchDeviceId || state.connection.defaultDeviceId);
   currentDevices = watchSync.devices;
+  const launchIndex = launchDeviceId
+    ? watchSync.devices.findIndex((device) => device.id === launchDeviceId)
+    : -1;
   sendResponse({
     [APP_MESSAGE_KEYS.state]: encodeStateCode(state.connection.state),
     [APP_MESSAGE_KEYS.devices]: JSON.stringify(
@@ -1238,7 +1272,8 @@ const sendDeviceSync = (state: LocalState) => {
         formatBatteryText(device.batteryLevelPercent, device.isCharging)
       ])
     ),
-    [APP_MESSAGE_KEYS.selectedIndex]: watchSync.selectedIndex
+    [APP_MESSAGE_KEYS.selectedIndex]: watchSync.selectedIndex,
+    [APP_MESSAGE_KEYS.launchIndex]: launchIndex
   });
 };
 
@@ -2166,7 +2201,12 @@ const runAppleSrpSignin = async (trimmedAppleId: string, password: string): Prom
       serviceRoot: previous.serviceRoot || "",
       dsid: previous.dsid || "",
       clientId: clientId,
-      password: password
+      password: password,
+      // signin/complete does not re-issue X-Apple-TwoSV-Trust-Token on a
+      // trusted (200) sign-in — only /2sv/trust after 2FA does. Seed the
+      // stored token so a header-less response can't blank it out of the
+      // persisted session, which would force 2FA on the next re-auth.
+      trustToken: previous.trustToken || ""
     },
     completeResponse.headers
   ) as AppleSessionBundle;
@@ -2307,7 +2347,12 @@ const attemptSilentReauth = async (session: AppleSessionBundle): Promise<AppleSe
   const silentReauthStartMs = nowMs();
 
   try {
-    console.log("silentReauth: re-running SRP sign-in with stored credentials");
+    // Start from an empty cookie jar, like a fresh browser would. The dead
+    // session's cookies (especially the FMIP-scoped X-APPLE-WEBAUTH-* set)
+    // otherwise get replayed alongside the new login's cookies, and Find My's
+    // re-auth gate keeps answering initClient with an instant HTTP 450.
+    clearCookieJar();
+    console.log("silentReauth: cleared cookie jar; re-running SRP sign-in with stored credentials");
     const signin = await runAppleSrpSignin(appleId, password);
 
     if (signin.completeResponse.status === 409) {
@@ -2637,7 +2682,7 @@ const refreshDevicesDirectApple = async (state: LocalState, locate = true): Prom
 
   // 450 = FIND_MY_REAUTH_REQUIRED (per pyicloud). Re-authenticate session and retry.
   if (response.status === 450) {
-    console.log("refreshDevices: got 450, re-authenticating session...");
+    console.log("refreshDevices: got 450, re-authenticating session... " + describeFmipRejection(response));
     try {
       session = await ensureAccountLogin(session);
       persistDirectAppleSession(session);
@@ -2656,6 +2701,25 @@ const refreshDevicesDirectApple = async (state: LocalState, locate = true): Prom
       if (reauthed) {
         session = reauthed;
         response = await requestRefresh(session);
+        if (response.status === 450) {
+          console.log("refreshDevices: 450 persists on a fresh session " + describeFmipRejection(response));
+        }
+      } else {
+        // Silent re-auth needs the user (no stored password, or the trust
+        // token was rejected with a 409). Reporting this as "degraded" would
+        // hide the sign-in prompt and re-run a full SRP sign-in against Apple
+        // on every sync — surface needs_reauth like the 401/403/421 path.
+        return Object.assign({}, state, {
+          devices: [],
+          session: session,
+          connection: {
+            state: "needs_reauth",
+            summary: "Apple session expired. Open settings to sign in again.",
+            provider: "direct_apple",
+            lastCheckedAt: nowIso(),
+            defaultDeviceId: session.defaultDeviceId
+          }
+        });
       }
     }
   }
@@ -3113,6 +3177,15 @@ Pebble.addEventListener("webviewclosed", (event: any) => {
     if (action === "set_distance_unit") {
       const distanceUnit: DistanceUnit = parsed.distanceUnit === "kilometers" ? "kilometers" : "miles";
       writeStoredPreferences({ distanceUnit });
+      sendDeviceSync(ensureState());
+      return;
+    }
+
+    if (action === "set_launch_device") {
+      const launchDeviceId = String(parsed.launchDeviceId || "");
+      console.log("set_launch_device: " + (launchDeviceId ? "device selected" : "device list (default)"));
+      writeStoredPreferences({ launchDeviceId });
+      // Push a sync right away so the watch persists the new launch target.
       sendDeviceSync(ensureState());
       return;
     }

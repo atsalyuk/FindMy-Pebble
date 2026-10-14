@@ -3,6 +3,10 @@
 ## Git workflow
 
 Default branch: `main`.
+- **Fetch first.** Before reading or editing anything, run `git fetch --prune origin`. Then make sure you
+  start from the latest `origin/main`: run `git pull --ff-only` on `main`, or `git rebase origin/main` in a new
+  branch or worktree. If either fails, or there are uncommitted changes you didn't make, stop and tell me.
+  Fetch again before you push, open a PR or deploy.
 
 - ⚠️ `origin` = github.com/atsalyuk/FindMy-Pebble is **PUBLIC**. Before every commit, check the diff for Apple ID
   emails, passwords, trust tokens, device IDs, locations and IPs. Credentials come from settings at runtime and are never
